@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K8s Cluster Core Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@500;700&display=swap');
+        .font-neon { font-family: 'Orbitron', sans-serif; }
+        .font-panel { font-family: 'Rajdhani', sans-serif; }
+        .glow-blue { text-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
+        .glow-green { text-shadow: 0 0 10px rgba(52, 211, 153, 0.7); }
+        .border-glow { box-shadow: inset 0 0 15px rgba(0, 191, 255, 0.1), 0 0 10px rgba(0, 191, 255, 0.2); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-panel min-h-screen selection:bg-cyan-500 selection:text-black">
+
+    <header class="border-b border-cyan-500/30 bg-slate-900/80 backdrop-blur-md px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <div class="h-3 w-3 rounded-full bg-emerald-500 animate-ping"></div>
+            <h1 class="text-2xl font-bold tracking-wider font-neon text-cyan-400 glow-blue">K8S-NODE-CLUSTER // LIVE</h1>
+        </div>
+        <div class="flex items-center space-x-6 text-sm text-slate-400">
+            <div>STATUS: <span class="text-emerald-400 font-bold glow-green">OPERATIONAL</span></div>
+            <div>REFRESH: <span class="text-cyan-400 font-neon">1s</span></div>
+        </div>
+    </header>
+
+    <main class="p-6 max-w-7xl mx-auto space-y-6">
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900/60 border border-cyan-500/20 rounded-xl p-4 border-glow">
+                <div class="text-xs text-slate-400 uppercase tracking-widest">Active Pods</div>
+                <div class="flex items-baseline justify-between mt-2">
+                    <span class="text-3xl font-bold font-neon text-cyan-400" id="pod-count">24</span>
+                    <span class="text-xs text-emerald-400"><i class="fas fa-caret-up"></i> Healthy</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+                    <div class="bg-cyan-500 h-full rounded-full" style="width: 78%"></div>
+                </div>
+            </div>
+            <div class="bg-slate-900/60 border border-cyan-500/20 rounded-xl p-4 border-glow">
+                <div class="text-xs text-slate-400 uppercase tracking-widest">Total Deployments</div>
+                <div class="flex items-baseline justify-between mt-2">
+                    <span class="text-3xl font-bold font-neon text-purple-400">8</span>
+                    <span class="text-xs text-slate-400">0 Pending</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+                    <div class="bg-purple-500 h-full rounded-full" style="width: 100%"></div>
+                </div>
+            </div>
+            <div class="bg-slate-900/60 border border-cyan-500/20 rounded-xl p-4 border-glow">
+                <div class="text-xs text-slate-400 uppercase tracking-widest">Global CPU Usage</div>
+                <div class="flex items-baseline justify-between mt-2">
+                    <span class="text-3xl font-bold font-neon text-amber-400" id="cpu-text">42%</span>
+                    <span class="text-xs text-amber-400">Nominal</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+                    <div id="cpu-bar" class="bg-amber-400 h-full rounded-full transition-all duration-1000" style="width: 42%"></div>
+                </div>
+            </div>
+            <div class="bg-slate-900/60 border border-cyan-500/20 rounded-xl p-4 border-glow">
+                <div class="text-xs text-slate-400 uppercase tracking-widest">Global Memory</div>
+                <div class="flex items-baseline justify-between mt-2">
+                    <span class="text-3xl font-bold font-neon text-rose-500 animate-pulse" id="mem-text">68%</span>
+                    <span class="text-xs text-rose-400">High Load</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+                    <div id="mem-bar" class="bg-rose-500 h-full rounded-full transition-all duration-1000" style="width: 68%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 bg-slate-900/40 border border-cyan-500/20 rounded-xl p-5 backdrop-blur-sm">
+                <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4 font-neon flex items-center gap-2">
+                    <i class="fas fa-chart-line text-cyan-400"></i> Cluster Performance Timeline
+                </h3>
+                <div class="h-64">
+                    <canvas id="timelineChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/40 border border-cyan-500/20 rounded-xl p-5 backdrop-blur-sm flex flex-col justify-between">
+                <div>
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4 font-neon flex items-center gap-2">
+                        <i class="fas fa-chart-pie text-purple-400"></i> Namespace Distribution
+                    </h3>
+                    <div class="h-48 flex justify-center">
+                        <canvas id="pieChart"></canvas>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-500 text-center mt-2">
+                    Isolation layer: Enabled
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-cyan-500/30 rounded-xl p-5 font-mono text-xs border-glow">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-3">
+                <span class="text-cyan-400 font-neon uppercase tracking-wider"><i class="fas fa-terminal mr-2"></i> Cluster Event Stream</span>
+                <span class="bg-cyan-950 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded text-[10px]">STDOUT</span>
+            </div>
+            <div id="log-container" class="space-y-1.5 h-36 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-800">
+                </div>
+        </div>
+    </main>
+
+    <script>
+        // --- 1. Line Chart Config (Cluster Performance) ---
+        const ctxTimeline = document.getElementById('timelineChart').getContext('2d');
+        const timelineChart = new Chart(ctxTimeline, {
+            type: 'line',
+            data: {
+                labels: Array(10).fill(''),
+                datasets: [
+                    {
+                        label: 'CPU Usage (%)',
+                        borderColor: '#fbbf24',
+                        borderWidth: 2,
+                        data: [35, 45, 40, 50, 42, 48, 55, 43, 40, 42],
+                        tension: 0.4,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Memory Usage (%)',
+                        borderColor: '#f43f5e',
+                        borderWidth: 2,
+                        data: [65, 66, 64, 67, 68, 65, 69, 68, 67, 68],
+                        tension: 0.2,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#94a3b8' } } },
+                scales: {
+                    x: { grid: { color: 'rgba(51, 65, 85, 0.2)' } },
+                    y: { min: 0, max: 100, grid: { color: 'rgba(51, 65, 85, 0.2)' }, ticks: { color: '#64748b' } }
+                }
+            }
+        });
+
+        // --- 2. Pie Chart Config (Namespace Breakdown) ---
+        const ctxPie = document.getElementById('pieChart').getContext('2d');
+        new Chart(ctxPie, {
+            type: 'doughnut',
+            data: {
+                labels: ['default (WordPress)', 'kube-system', 'new-site'],
+                datasets: [{
+                    data: [12, 8, 4],
+                    backgroundColor: ['#06b6d4', '#64748b', '#a855f7'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12 } } }
+            }
+        });
+
+        // --- 3. Simulated Live Dynamics Engine ---
+        const logContainer = document.getElementById('log-container');
+        const namespaces = ['default', 'kube-system', 'new-site'];
+        const pods = ['wp-front-76d', 'mysql-db-0', 'coredns-86', 'new-site-dep-v1'];
+        const events = ['Pod scheduled successfully', 'Pulling image from registry', 'Container started', 'Health check passed', 'Routing internal traffic'];
+
+        function generateLog() {
+            const time = new Date().toISOString().slice(11, 19);
+            const ns = namespaces[Math.floor(Math.random() * namespaces.length)];
+            const pod = pods[Math.floor(Math.random() * pods.length)];
+            const ev = events[Math.floor(Math.random() * events.length)];
+            
+            const logLine = document.createElement('div');
+            logLine.className = 'text-slate-400 hover:bg-slate-900/60 p-0.5 rounded transition-colors';
+            logLine.innerHTML = `[${time}] <span class="text-purple-400">[ns/${ns}]</span> <span class="text-cyan-400">${pod}</span> &raquo; ${ev}`;
+            
+            logContainer.appendChild(logLine);
+            logContainer.scrollTop = logContainer.scrollHeight;
+
+            if (logContainer.children.length > 30) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+
+        // Live loop to fluctuate system specs
+        setInterval(() => {
+            // Generate log event
+            if(Math.random() > 0.4) generateLog();
+
+            // Fluctuate CPU
+            const cpuVal = Math.floor(Math.random() * (60 - 35) + 35);
+            document.getElementById('cpu-text').innerText = `${cpuVal}%`;
+            document.getElementById('cpu-bar').style.width = `${cpuVal}%`;
+
+            // Fluctuate Memory
+            const memVal = Math.floor(Math.random() * (72 - 65) + 65);
+            document.getElementById('mem-text').innerText = `${memVal}%`;
+            document.getElementById('mem-bar').style.width = `${memVal}%`;
+
+            // Update line chart
+            timelineChart.data.datasets[0].data.shift();
+            timelineChart.data.datasets[0].data.push(cpuVal);
+            timelineChart.data.datasets[1].data.shift();
+            timelineChart.data.datasets[1].data.push(memVal);
+            timelineChart.update('none');
+
+        }, 1200);
+
+        // Pre-populate some logs
+        for(let i=0; i<8; i++) generateLog();
+    </script>
+</body>
+</html>
