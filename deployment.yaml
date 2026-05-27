@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dashboard-monitor
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-html
+  namespace: dashboard-monitor
+data:
+  index.html: |
+    # (Jenkins will automatically inject your index.html here later)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-dashboard
+  namespace: dashboard-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cluster-dashboard
+  template:
+    metadata:
+      labels:
+        app: cluster-dashboard
+    spec:
+      containers:
+      - name: webserver
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html-volume
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html-volume
+        configMap:
+          name: dashboard-html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-service
+  namespace: dashboard-monitor
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: cluster-dashboard
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dashboard-ingress
+  namespace: dashboard-monitor
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+disabled
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: dashboard.local  # Change this to your preferred domain name or IP routing
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: dashboard-service
+            port:
+              number: 80
